@@ -157,71 +157,114 @@ class DashboardController extends Controller
         }
     }
 
-    private function getSuperAdminData()
-    {
-        $cacheKey = 'super_admin_dashboard_stats';
+   private function getSuperAdminData()
+{
+    $cacheKey = 'super_admin_dashboard_stats_v3';
 
-        try {
-            return Cache::remember($cacheKey, 300, function () {
-                // Get all counts in a single optimized query
-                $counts = DB::selectOne("
-                    SELECT
-                        (SELECT COUNT(*) FROM companies) as total_companies,
-                        (SELECT COUNT(*) FROM agencies) as total_agencies,
-                        (SELECT COUNT(*) FROM tips WHERE status = 'scheduled') as total_trips,
-                        (SELECT COUNT(*) FROM customers) as total_customers,
-                        (SELECT COUNT(*) FROM tickets) as total_tickets
-                ");
+    try {
+        return Cache::remember($cacheKey, 300, function () {
+            // Get all counts in optimized queries
+            $counts = DB::selectOne("
+                SELECT
+                    (SELECT COUNT(*) FROM companies) as total_companies,
+                    (SELECT COUNT(*) FROM agencies) as total_agencies,
+                    (SELECT COUNT(*) FROM customers) as total_customers,
+                    (SELECT COUNT(*) FROM tickets) as total_tickets,
+                    (SELECT COUNT(*) FROM tips WHERE status = 'scheduled') as total_trips
+            ");
 
-                // Recent trips with proper eager loading
-                $recentTrips = Tips::query()
-                    ->with([
-                        'bus.agence:id_agence,name',
-                        'journey.departureLocation.city',
-                        'journey.arrivalLocation.city'
-                    ])
-                    ->orderBy('created_at', 'desc')
-                    ->limit(5)
-                    ->get();
+            // Get recent trips with relationships
+            $recentTrips = Tips::with([
+                'bus.agence:id_agence,name',
+                'journey.departureLocation.city:id_city,name',
+                'journey.arrivalLocation.city:id_city,name'
+            ])
+            ->where('status', 'scheduled')
+            ->orderBy('created_at', 'desc')
+            ->limit(5)
+            ->get()
+            ->map(function ($trip) {
+                return (object) [
+                    'departureLocation' => (object) [
+                        'city' => (object) [
+                            'name' => $trip->journey->departureLocation->city->name ?? 'Unknown'
+                        ]
+                    ],
+                    'arrivalLocation' => (object) [
+                        'city' => (object) [
+                            'name' => $trip->journey->arrivalLocation->city->name ?? 'Unknown'
+                        ]
+                    ],
+                    'departure_date' => $trip->departure_time?->format('Y-m-d') ?? now()->format('Y-m-d'),
+                    'departure_time' => $trip->departure_time?->format('H:i') ?? '00:00',
+                    'bus' => (object) [
+                        'registration_number' => $trip->bus->registration_number ?? 'N/A',
+                        'agency' => (object) [
+                            'name' => $trip->bus->agence->name ?? 'N/A'
+                        ]
+                    ],
+                    'status' => $trip->status ?? 'scheduled',
+                ];
+            });
 
-                // Revenue data for chart (last 30 days)
-                $revenueData = DB::table('tickets')
-                    ->select(
-                        DB::raw('DATE(purchase_date) as date'),
-                        DB::raw('SUM(price) as revenue')
-                    )
-                    ->where('purchase_date', '>=', Carbon::now()->subDays(30))
-                    ->groupBy('date')
-                    ->orderBy('date')
-                    ->get();
+            // Get revenue data for chart
+            $revenueData = DB::table('tickets')
+                ->select(
+                    DB::raw('DATE(created_at) as date'),
+                    DB::raw('COALESCE(SUM(price), 0) as revenue')
+                )
+                ->where('created_at', '>=', now()->subDays(30))
+                ->groupBy('date')
+                ->orderBy('date')
+                ->get()
+                ->map(function ($item) {
+                    return (object) [
+                        'date' => Carbon::parse($item->date)->format('M d'),
+                        'revenue' => (float) $item->revenue
+                    ];
+                });
 
-                return [
+            return [
+                'stats' => [
                     'total_companies' => (int) ($counts->total_companies ?? 0),
                     'total_agencies' => (int) ($counts->total_agencies ?? 0),
                     'total_trips' => (int) ($counts->total_trips ?? 0),
                     'total_customers' => (int) ($counts->total_customers ?? 0),
                     'total_tickets' => (int) ($counts->total_tickets ?? 0),
-                    'recent_trips' => $recentTrips,
-                    'revenue_data' => $revenueData,
-                ];
-            });
-        } catch (\Exception $e) {
-            Log::error('Error in getSuperAdminData: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString()
-            ]);
+                ],
+                'total_companies' => (int) ($counts->total_companies ?? 0),
+                'total_agencies' => (int) ($counts->total_agencies ?? 0),
+                'total_trips' => (int) ($counts->total_trips ?? 0),
+                'total_customers' => (int) ($counts->total_customers ?? 0),
+                'total_tickets' => (int) ($counts->total_tickets ?? 0),
+                'recent_trips' => $recentTrips,
+                'revenue_data' => $revenueData,
+            ];
+        });
+    } catch (\Exception $e) {
+        Log::error('Error in getSuperAdminData: ' . $e->getMessage(), [
+            'trace' => $e->getTraceAsString(),
+            'user_id' => auth()->id()
+        ]);
 
-            return [
+        return [
+            'stats' => [
                 'total_companies' => 0,
                 'total_agencies' => 0,
                 'total_trips' => 0,
                 'total_customers' => 0,
                 'total_tickets' => 0,
-                'recent_trips' => collect([]),
-                'revenue_data' => collect([]),
-            ];
-        }
+            ],
+            'total_companies' => 0,
+            'total_agencies' => 0,
+            'total_trips' => 0,
+            'total_customers' => 0,
+            'total_tickets' => 0,
+            'recent_trips' => collect([]),
+            'revenue_data' => collect([]),
+        ];
     }
-
+}
     private function getCompanyAdminData($user)
     {
         try {

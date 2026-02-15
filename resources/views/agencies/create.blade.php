@@ -1,623 +1,641 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            {{ auth()->user()->hasRole('super_admin') ? 'Create Agency (Administrator)' : 'Create Agency' }}
-        </h2>
+        <div class="flex justify-between items-center">
+            <div>
+                <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+                    {{ auth()->user()->hasRole('super_admin') ? 'Create New Agency' : 'Add Agency to Your Company' }}
+                </h2>
+                <p class="text-sm text-gray-600 mt-1">
+                    {{ auth()->user()->hasRole('super_admin')
+                        ? 'Register a new agency in the system'
+                        : 'Add a new agency under your company management' }}
+                </p>
+            </div>
+
+            @php
+                $user = auth()->user();
+                $backRoute = match($user->role) {
+                    'super_admin' => 'admin.agencies.index',
+                    'company_admin' => 'my-company.agencies.index',
+                    default => 'dashboard'
+                };
+            @endphp
+
+            @if(isset($backRoute) && Route::has($backRoute))
+                <a href="{{ route($backRoute) }}"
+                   class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                    <i class="fas fa-arrow-left mr-2"></i>
+                    Back to Agencies
+                </a>
+            @endif
+        </div>
     </x-slot>
 
     <div class="py-12">
         <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
+
+            <!-- Success/Error Messages -->
+            @if(session('success'))
+                <div class="mb-6 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative" role="alert">
+                    <span class="block sm:inline">{{ session('success') }}</span>
+                </div>
+            @endif
+
+            @if(session('error'))
+                <div class="mb-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                    <span class="block sm:inline">{{ session('error') }}</span>
+                </div>
+            @endif
+
+            <!-- Validation Errors -->
+            @if($errors->any())
+                <div class="mb-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                    <strong class="font-bold">Please fix the following errors:</strong>
+                    <ul class="mt-2 list-disc list-inside">
+                        @foreach($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6">
-                    {{-- Role-based header --}}
+
+                    {{-- Role-based form action --}}
                     @php
                         $isSuperAdmin = auth()->user()->hasRole('super_admin');
                         $isCompanyAdmin = auth()->user()->hasRole('company_admin');
-                        $formAction = $isSuperAdmin
-                            ? route('admin.agencies.store')
-                            : route('my-agency.store');
+
+                        // Determine the correct store route based on role
+                        $storeRoute = match(true) {
+                            $isSuperAdmin => 'admin.agencies.store',
+                            $isCompanyAdmin => 'my-company.agencies.store', // Fixed: was 'my-agency.store'
+                            default => null
+                        };
+
+                        // Determine if route exists
+                        $routeExists = $storeRoute && Route::has($storeRoute);
+
+                        // Get company ID for company admin
+                        $companyId = $isCompanyAdmin ? auth()->user()->company_id : null;
+                        $company = $isCompanyAdmin ? auth()->user()->company : null;
                     @endphp
 
-                    <div class="mb-6 flex items-center justify-between">
-                        <h3 class="text-lg font-medium text-gray-900">
-                            Create New Agency
-                        </h3>
-                        @if($isSuperAdmin)
-                            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
-                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                                </svg>
-                                Super Admin
-                            </span>
-                        @elseif($isCompanyAdmin)
-                            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                                </svg>
-                                Company Admin
-                            </span>
-                        @endif
+                    <!-- Form Header with Instructions -->
+                    <div class="mb-6 p-4 {{ $isSuperAdmin ? 'bg-purple-50' : 'bg-blue-50' }} rounded-lg">
+                        <h4 class="text-sm font-medium {{ $isSuperAdmin ? 'text-purple-800' : 'text-blue-800' }} flex items-center">
+                            <i class="fas fa-info-circle mr-2"></i>
+                            Agency Registration Information
+                        </h4>
+                        <p class="text-xs {{ $isSuperAdmin ? 'text-purple-600' : 'text-blue-600' }} mt-1">
+                            Fields marked with <span class="text-red-500">*</span> are required.
+                            @if($isCompanyAdmin && $company)
+                                This agency will be associated with <strong>{{ $company->name }}</strong>.
+                            @elseif($isCompanyAdmin && !$company)
+                                <span class="text-red-600">Warning: No company associated with your account.</span>
+                            @endif
+                        </p>
                     </div>
 
-                    {{-- Form with enctype for potential file uploads --}}
-                    <form method="POST" action="{{ $formAction }}" class="space-y-8">
-                        @csrf
+                    @if(!$isCompanyAdmin || ($isCompanyAdmin && $companyId))
+                        @if($routeExists)
+                            <form method="POST" action="{{ route($storeRoute) }}" class="space-y-6">
+                                @csrf
 
-                        {{-- Company Selection Section --}}
-                        <div class="bg-gray-50 p-6 rounded-lg border border-gray-200">
-                            <h4 class="text-md font-medium text-gray-700 mb-4 flex items-center">
-                                <svg class="w-5 h-5 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                                </svg>
-                                Company Assignment
-                            </h4>
+                                <!-- Basic Information Section -->
+                                <div class="mb-8">
+                                    <h3 class="text-lg font-medium text-gray-900 mb-4 pb-2 border-b border-gray-200 flex items-center">
+                                        <i class="fas fa-building text-blue-600 mr-2"></i>
+                                        Basic Information
+                                    </h3>
 
-                            @if($isSuperAdmin)
-                            <div class="mb-4">
-                                <label for="id_company" class="block text-sm font-medium text-gray-700 mb-2">
-                                    Select Company <span class="text-red-500">*</span>
-                                </label>
-                                <select name="id_company" id="id_company" required
-                                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('id_company') border-red-500 @enderror">
-                                    <option value="">-- Choose a company --</option>
-                                    @foreach($companies as $company)
-                                        <option value="{{ $company->id_company }}" {{ old('id_company') == $company->id_company ? 'selected' : '' }}
-                                                data-status="{{ $company->status }}">
-                                            {{ $company->name }} @if($company->status !== 'active')({{ $company->status }})@endif
-                                        </option>
-                                    @endforeach
-                                </select>
-                                @error('id_company')
-                                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                @enderror
-                                <p class="mt-1 text-xs text-gray-500">Select the company this agency will belong to</p>
-                            </div>
-                            @else
-                                <input type="hidden" name="id_company" value="{{ auth()->user()->company_id }}">
-                                <div class="bg-blue-50 p-4 rounded-md">
-                                    <p class="text-sm text-blue-700 flex items-start">
-                                        <svg class="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        <span>
-                                            <strong class="font-medium">Company:</strong> {{ auth()->user()->company->name ?? 'Your company' }}<br>
-                                            <span class="text-xs">This agency will be automatically assigned to your company.</span>
-                                        </span>
-                                    </p>
-                                </div>
-                            @endif
-                        </div>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <!-- Agency Name -->
+                                        <div class="md:col-span-2">
+                                            <label for="name" class="block text-sm font-medium text-gray-700 mb-2">
+                                                Agency Name <span class="text-red-500">*</span>
+                                            </label>
+                                            <input type="text"
+                                                   name="name"
+                                                   id="name"
+                                                   value="{{ old('name') }}"
+                                                   required
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('name') border-red-500 @enderror"
+                                                   placeholder="e.g., Downtown Travel Agency">
+                                            @error('name')
+                                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                            @enderror
+                                        </div>
 
-                        {{-- Location Details with AJAX loading --}}
-                        <div class="bg-gray-50 p-6 rounded-lg border border-gray-200">
-                            <h4 class="text-md font-medium text-gray-700 mb-4 flex items-center">
-                                <svg class="w-5 h-5 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
-                                Location Details
-                            </h4>
+                                        <!-- Email -->
+                                        <div>
+                                            <label for="email" class="block text-sm font-medium text-gray-700 mb-2">
+                                                Email Address <span class="text-red-500">*</span>
+                                            </label>
+                                            <input type="email"
+                                                   name="email"
+                                                   id="email"
+                                                   value="{{ old('email') }}"
+                                                   required
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('email') border-red-500 @enderror"
+                                                   placeholder="agency@example.com">
+                                            @error('email')
+                                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                            @enderror
+                                        </div>
 
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="location-container">
-                                {{-- Country --}}
-                                <div>
-                                    <label for="id_country" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Country <span class="text-red-500">*</span>
-                                    </label>
-                                    <select name="id_country" id="id_country" required
-                                            class="location-select w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('id_country') border-red-500 @enderror">
-                                        <option value="">-- Select Country --</option>
-                                        @foreach($countries as $country)
-                                            <option value="{{ $country->id_country }}" {{ old('id_country') == $country->id_country ? 'selected' : '' }}>
-                                                {{ $country->name }}
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                    @error('id_country')
-                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                </div>
+                                        <!-- Phone -->
+                                        <div>
+                                            <label for="phone" class="block text-sm font-medium text-gray-700 mb-2">
+                                                Phone Number <span class="text-red-500">*</span>
+                                            </label>
+                                            <input type="tel"
+                                                   name="phone"
+                                                   id="phone"
+                                                   value="{{ old('phone') }}"
+                                                   required
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('phone') border-red-500 @enderror"
+                                                   placeholder="+237 123 456 789">
+                                            @error('phone')
+                                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                            @enderror
+                                        </div>
 
-                                {{-- Region (loaded via AJAX) --}}
-                                <div>
-                                    <label for="id_region" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Region <span class="text-red-500">*</span>
-                                    </label>
-                                    <select name="id_region" id="id_region" required disabled
-                                            class="location-select w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('id_region') border-red-500 @enderror">
-                                        <option value="">-- Select Country First --</option>
-                                    </select>
-                                    @error('id_region')
-                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                </div>
+                                        <!-- Address -->
+                                        <div class="md:col-span-2">
+                                            <label for="address" class="block text-sm font-medium text-gray-700 mb-2">
+                                                Physical Address <span class="text-red-500">*</span>
+                                            </label>
+                                            <textarea name="address"
+                                                      id="address"
+                                                      required
+                                                      rows="2"
+                                                      class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('address') border-red-500 @enderror"
+                                                      placeholder="Full street address, landmark, etc.">{{ old('address') }}</textarea>
+                                            @error('address')
+                                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                            @enderror
+                                        </div>
 
-                                {{-- Sub Region (loaded via AJAX) --}}
-                                <div>
-                                    <label for="id_sub_region" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Sub Region <span class="text-red-500">*</span>
-                                    </label>
-                                    <select name="id_sub_region" id="id_sub_region" required disabled
-                                            class="location-select w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('id_sub_region') border-red-500 @enderror">
-                                        <option value="">-- Select Region First --</option>
-                                    </select>
-                                    @error('id_sub_region')
-                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                </div>
-
-                                {{-- City (loaded via AJAX) --}}
-                                <div>
-                                    <label for="id_city" class="block text-sm font-medium text-gray-700 mb-2">
-                                        City <span class="text-red-500">*</span>
-                                    </label>
-                                    <select name="id_city" id="id_city" required disabled
-                                            class="location-select w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('id_city') border-red-500 @enderror">
-                                        <option value="">-- Select Sub Region First --</option>
-                                    </select>
-                                    @error('id_city')
-                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                </div>
-
-                                {{-- Address/Coordinates (loaded via AJAX) --}}
-                                <div class="md:col-span-2">
-                                    <label for="id_coord" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Address/Coordinates <span class="text-red-500">*</span>
-                                    </label>
-                                    <select name="id_coord" id="id_coord" required disabled
-                                            class="location-select w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('id_coord') border-red-500 @enderror">
-                                        <option value="">-- Select City First --</option>
-                                    </select>
-                                    @error('id_coord')
-                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                    <div id="coordinates-loading" class="hidden mt-2 text-sm text-gray-500">
-                                        <svg class="animate-spin h-4 w-4 inline mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                        Loading coordinates...
+                                        <!-- Company (Hidden for company admin, visible for super admin) -->
+                                        @if($isSuperAdmin)
+                                        <div>
+                                            <label for="id_company" class="block text-sm font-medium text-gray-700 mb-2">
+                                                Parent Company <span class="text-red-500">*</span>
+                                            </label>
+                                            <select name="id_company"
+                                                    id="id_company"
+                                                    required
+                                                    class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('id_company') border-red-500 @enderror">
+                                                <option value="">Select Company</option>
+                                                @foreach($companies ?? [] as $company)
+                                                    <option value="{{ $company->id_company }}"
+                                                        {{ old('id_company') == $company->id_company ? 'selected' : '' }}>
+                                                        {{ $company->name }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                            @error('id_company')
+                                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                            @enderror
+                                        </div>
+                                        @else
+                                            <input type="hidden" name="id_company" value="{{ $companyId }}">
+                                        @endif
                                     </div>
                                 </div>
-                            </div>
-                        </div>
 
-                        {{-- Agency Details --}}
-                        <div class="bg-gray-50 p-6 rounded-lg border border-gray-200">
-                            <h4 class="text-md font-medium text-gray-700 mb-4 flex items-center">
-                                <svg class="w-5 h-5 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                                </svg>
-                                Agency Information
-                            </h4>
+                                <!-- Location Section -->
+                                <div class="mb-8">
+                                    <h3 class="text-lg font-medium text-gray-900 mb-4 pb-2 border-b border-gray-200 flex items-center">
+                                        <i class="fas fa-map-marker-alt text-green-600 mr-2"></i>
+                                        Location Details
+                                    </h3>
 
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <label for="name" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Agency Name <span class="text-red-500">*</span>
-                                    </label>
-                                    <input type="text"
-                                           name="name"
-                                           id="name"
-                                           value="{{ old('name') }}"
-                                           required
-                                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('name') border-red-500 @enderror"
-                                           placeholder="e.g., Yaoundé Central Agency"
-                                           autofocus>
-                                    @error('name')
-                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <!-- Country -->
+                                        <div>
+                                            <label for="id_country" class="block text-sm font-medium text-gray-700 mb-2">
+                                                Country <span class="text-red-500">*</span>
+                                            </label>
+                                            <select name="id_country"
+                                                    id="id_country"
+                                                    required
+                                                    class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('id_country') border-red-500 @enderror">
+                                                <option value="">Select Country</option>
+                                                @foreach($countries ?? [] as $country)
+                                                    <option value="{{ $country->id_country }}"
+                                                        {{ old('id_country') == $country->id_country ? 'selected' : '' }}>
+                                                        {{ $country->name }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                            @error('id_country')
+                                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                            @enderror
+                                        </div>
+
+                                        <!-- Region -->
+                                        <div>
+                                            <label for="id_region" class="block text-sm font-medium text-gray-700 mb-2">
+                                                Region <span class="text-red-500">*</span>
+                                            </label>
+                                            <select name="id_region"
+                                                    id="id_region"
+                                                    required
+                                                    class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('id_region') border-red-500 @enderror">
+                                                <option value="">Select Region</option>
+                                                @foreach($regions ?? [] as $region)
+                                                    <option value="{{ $region->id_region }}"
+                                                        {{ old('id_region') == $region->id_region ? 'selected' : '' }}
+                                                        data-country-id="{{ $region->id_country ?? '' }}">
+                                                        {{ $region->name }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                            @error('id_region')
+                                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                            @enderror
+                                        </div>
+
+                                        <!-- Sub Region -->
+                                        <div>
+                                            <label for="id_sub_region" class="block text-sm font-medium text-gray-700 mb-2">
+                                                Sub Region <span class="text-red-500">*</span>
+                                            </label>
+                                            <select name="id_sub_region"
+                                                    id="id_sub_region"
+                                                    required
+                                                    class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('id_sub_region') border-red-500 @enderror">
+                                                <option value="">Select Sub Region</option>
+                                                @foreach($subRegions ?? [] as $subRegion)
+                                                    <option value="{{ $subRegion->id_sub_region }}"
+                                                        {{ old('id_sub_region') == $subRegion->id_sub_region ? 'selected' : '' }}
+                                                        data-region-id="{{ $subRegion->id_region }}">
+                                                        {{ $subRegion->name }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                            @error('id_sub_region')
+                                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                            @enderror
+                                        </div>
+
+                                        <!-- City -->
+                                        <div>
+                                            <label for="id_city" class="block text-sm font-medium text-gray-700 mb-2">
+                                                City <span class="text-red-500">*</span>
+                                            </label>
+                                            <select name="id_city"
+                                                    id="id_city"
+                                                    required
+                                                    class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('id_city') border-red-500 @enderror">
+                                                <option value="">Select City</option>
+                                                @foreach($cities ?? [] as $city)
+                                                    <option value="{{ $city->id_city }}"
+                                                        {{ old('id_city') == $city->id_city ? 'selected' : '' }}
+                                                        data-sub-region-id="{{ $city->id_sub_region }}">
+                                                        {{ $city->name }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                            @error('id_city')
+                                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                            @enderror
+                                        </div>
+
+                                        <!-- Coordinates (Optional) -->
+                                        <div class="md:col-span-2">
+                                            <label for="id_coord" class="block text-sm font-medium text-gray-700 mb-2">
+                                                Exact Location <span class="text-gray-400 text-xs">(optional)</span>
+                                            </label>
+                                            <select name="id_coord"
+                                                    id="id_coord"
+                                                    class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('id_coord') border-red-500 @enderror">
+                                                <option value="">Select Coordinates</option>
+                                            </select>
+                                            <p class="mt-1 text-xs text-gray-500">Select a specific location or enter coordinates manually</p>
+                                            @error('id_coord')
+                                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                            @enderror
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <div>
-                                    <label for="email" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Email <span class="text-red-500">*</span>
-                                    </label>
-                                    <input type="email"
-                                           name="email"
-                                           id="email"
-                                           value="{{ old('email') }}"
-                                           required
-                                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('email') border-red-500 @enderror"
-                                           placeholder="agency@example.com">
-                                    @error('email')
-                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                </div>
+                                @if($isSuperAdmin)
+                                    <!-- Admin User Creation Section (Super Admin Only) -->
+                                    <div class="mb-8">
+                                        <h3 class="text-lg font-medium text-gray-900 mb-4 pb-2 border-b border-gray-200 flex items-center">
+                                            <i class="fas fa-user-tie text-purple-600 mr-2"></i>
+                                            Agency Admin Account
+                                        </h3>
+                                        <p class="text-sm text-gray-600 mb-4">Create a user account for the agency administrator</p>
 
-                                <div>
-                                    <label for="phone" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Phone <span class="text-red-500">*</span>
-                                    </label>
-                                    <input type="tel"
-                                           name="phone"
-                                           id="phone"
-                                           value="{{ old('phone') }}"
-                                           required
-                                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('phone') border-red-500 @enderror"
-                                           placeholder="+237 XXX XXX XXX">
-                                    @error('phone')
-                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                </div>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <!-- Admin Name -->
+                                            <div>
+                                                <label for="admin_name" class="block text-sm font-medium text-gray-700 mb-2">
+                                                    Admin Full Name <span class="text-red-500">*</span>
+                                                </label>
+                                                <input type="text"
+                                                       name="admin_name"
+                                                       id="admin_name"
+                                                       value="{{ old('admin_name') }}"
+                                                       required
+                                                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                                       placeholder="John Doe">
+                                                @error('admin_name')
+                                                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                                @enderror
+                                            </div>
 
-                                <div>
-                                    <label for="address" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Street Address <span class="text-red-500">*</span>
-                                    </label>
-                                    <input type="text"
-                                           name="address"
-                                           id="address"
-                                           value="{{ old('address') }}"
-                                           required
-                                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('address') border-red-500 @enderror"
-                                           placeholder="123 Main Street">
-                                    @error('address')
-                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                </div>
-                            </div>
-                        </div>
+                                            <!-- Admin Email -->
+                                            <div>
+                                                <label for="admin_email" class="block text-sm font-medium text-gray-700 mb-2">
+                                                    Admin Email <span class="text-red-500">*</span>
+                                                </label>
+                                                <input type="email"
+                                                       name="admin_email"
+                                                       id="admin_email"
+                                                       value="{{ old('admin_email') }}"
+                                                       required
+                                                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                                       placeholder="admin@agency.com">
+                                                @error('admin_email')
+                                                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                                @enderror
+                                            </div>
 
-                        {{-- Admin Account Section --}}
-                        @if($isSuperAdmin)
-                        <div class="bg-gray-50 p-6 rounded-lg border border-gray-200">
-                            <h4 class="text-md font-medium text-gray-700 mb-4 flex items-center">
-                                <svg class="w-5 h-5 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                </svg>
-                                Agency Admin Account
-                            </h4>
+                                            <!-- Admin Password -->
+                                            <div>
+                                                <label for="admin_password" class="block text-sm font-medium text-gray-700 mb-2">
+                                                    Password <span class="text-red-500">*</span>
+                                                </label>
+                                                <input type="password"
+                                                       name="admin_password"
+                                                       id="admin_password"
+                                                       required
+                                                       minlength="8"
+                                                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                                       placeholder="Minimum 8 characters">
+                                                @error('admin_password')
+                                                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                                @enderror
+                                            </div>
 
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <label for="admin_name" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Admin Name <span class="text-red-500">*</span>
-                                    </label>
-                                    <input type="text"
-                                           name="admin_name"
-                                           id="admin_name"
-                                           value="{{ old('admin_name') }}"
-                                           required
-                                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('admin_name') border-red-500 @enderror"
-                                           placeholder="Full name">
-                                    @error('admin_name')
-                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                </div>
+                                            <!-- Admin Password Confirmation -->
+                                            <div>
+                                                <label for="admin_password_confirmation" class="block text-sm font-medium text-gray-700 mb-2">
+                                                    Confirm Password <span class="text-red-500">*</span>
+                                                </label>
+                                                <input type="password"
+                                                       name="admin_password_confirmation"
+                                                       id="admin_password_confirmation"
+                                                       required
+                                                       minlength="8"
+                                                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                            </div>
 
-                                <div>
-                                    <label for="admin_email" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Admin Email <span class="text-red-500">*</span>
-                                    </label>
-                                    <input type="email"
-                                           name="admin_email"
-                                           id="admin_email"
-                                           value="{{ old('admin_email') }}"
-                                           required
-                                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('admin_email') border-red-500 @enderror"
-                                           placeholder="admin@agency.com">
-                                    @error('admin_email')
-                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                </div>
+                                            <!-- Admin Phone -->
+                                            <div>
+                                                <label for="admin_phone" class="block text-sm font-medium text-gray-700 mb-2">
+                                                    Admin Phone <span class="text-gray-400 text-xs">(optional)</span>
+                                                </label>
+                                                <input type="tel"
+                                                       name="admin_phone"
+                                                       id="admin_phone"
+                                                       value="{{ old('admin_phone') }}"
+                                                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                                       placeholder="Admin contact number">
+                                                @error('admin_phone')
+                                                    <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                                @enderror
+                                            </div>
+                                        </div>
+                                    </div>
+                                @elseif($isCompanyAdmin)
+                                    {{-- Company Admin creates agency - they will be the admin --}}
+                                    <div class="mb-8 p-4 bg-blue-50 rounded-lg">
+                                        <div class="flex items-start">
+                                            <div class="flex-shrink-0">
+                                                <i class="fas fa-info-circle text-blue-600 mt-1"></i>
+                                            </div>
+                                            <div class="ml-3">
+                                                <h4 class="text-sm font-medium text-blue-800">Agency Administrator</h4>
+                                                <p class="text-sm text-blue-600 mt-1">
+                                                    You will be set as the administrator for this agency using your current account:
+                                                    <strong class="block mt-1">{{ auth()->user()->name }} ({{ auth()->user()->email }})</strong>
+                                                </p>
+                                                <input type="hidden" name="user_id" value="{{ auth()->user()->user_id }}">
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endif
 
-                                <div>
-                                    <label for="admin_password" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Admin Password <span class="text-red-500">*</span>
-                                    </label>
-                                    <input type="password"
-                                           name="admin_password"
-                                           id="admin_password"
-                                           required
-                                           minlength="8"
-                                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('admin_password') border-red-500 @enderror"
-                                           placeholder="Minimum 8 characters">
-                                    <p class="mt-1 text-xs text-gray-500">Password must be at least 8 characters long</p>
-                                    @error('admin_password')
-                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                </div>
+                                <!-- Form Actions -->
+                                <div class="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+                                    @if(isset($backRoute) && Route::has($backRoute))
+                                        <a href="{{ route($backRoute) }}"
+                                           class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                                            <i class="fas fa-times mr-2"></i>
+                                            Cancel
+                                        </a>
+                                    @endif
 
-                                <div>
-                                    <label for="admin_password_confirmation" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Confirm Password <span class="text-red-500">*</span>
-                                    </label>
-                                    <input type="password"
-                                           name="admin_password_confirmation"
-                                           id="admin_password_confirmation"
-                                           required
-                                           minlength="8"
-                                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                                           placeholder="Re-enter password">
+                                    <button type="submit"
+                                            class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                                        <i class="fas fa-save mr-2"></i>
+                                        {{ $isSuperAdmin ? 'Create Agency' : 'Add Agency' }}
+                                    </button>
                                 </div>
-
-                                <div>
-                                    <label for="admin_phone" class="block text-sm font-medium text-gray-700 mb-2">
-                                        Admin Phone
-                                    </label>
-                                    <input type="tel"
-                                           name="admin_phone"
-                                           id="admin_phone"
-                                           value="{{ old('admin_phone') }}"
-                                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 @error('admin_phone') border-red-500 @enderror"
-                                           placeholder="Admin contact number">
-                                    @error('admin_phone')
-                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                                    @enderror
-                                </div>
-                            </div>
-                        </div>
+                            </form>
                         @else
-                            <input type="hidden" name="admin_name" value="{{ auth()->user()->name }}">
-                            <input type="hidden" name="admin_email" value="{{ auth()->user()->email }}">
-                            <input type="hidden" name="admin_phone" value="{{ auth()->user()->phone }}">
-
-                            <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                            <!-- Fallback when route doesn't exist -->
+                            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4">
                                 <div class="flex">
                                     <div class="flex-shrink-0">
-                                        <svg class="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-                                        </svg>
+                                        <i class="fas fa-exclamation-triangle text-yellow-400"></i>
                                     </div>
-                                    <div class="ml-3 flex-1">
-                                        <p class="text-sm text-blue-700">
-                                            <strong class="font-medium">You will be the administrator for this agency.</strong><br>
-                                            Your account ({{ auth()->user()->email }}) will be updated with agency admin privileges upon creation.
+                                    <div class="ml-3">
+                                        <p class="text-sm text-yellow-700">
+                                            The form action could not be determined. Please contact support or try again later.
                                         </p>
                                     </div>
                                 </div>
                             </div>
                         @endif
-
-                        {{-- Status Message for Company Admin --}}
-                        @if($isCompanyAdmin && !$isSuperAdmin)
-                        <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                    @else
+                        <!-- Company admin without company -->
+                        <div class="bg-red-50 border-l-4 border-red-400 p-4">
                             <div class="flex">
                                 <div class="flex-shrink-0">
-                                    <svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
-                                    </svg>
+                                    <i class="fas fa-exclamation-circle text-red-400"></i>
                                 </div>
                                 <div class="ml-3">
-                                    <p class="text-sm text-yellow-700">
-                                        <strong>Pending Approval</strong><br>
-                                        Your agency will be created in <strong class="font-medium">pending</strong> status and will require approval from a super administrator before it becomes active. You'll be notified once approved.
+                                    <p class="text-sm text-red-700">
+                                        Your account is not associated with any company. Please contact the super administrator.
                                     </p>
                                 </div>
                             </div>
                         </div>
-                        @endif
-
-                        {{-- Form Actions --}}
-                        <div class="flex justify-end space-x-3 pt-6 border-t border-gray-200">
-                            <a href="{{ $isSuperAdmin ? route('admin.agencies.index') : route('my-agency.dashboard') }}"
-                               class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md font-medium text-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-150">
-                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                                Cancel
-                            </a>
-                            <button type="submit"
-                                    class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-medium text-sm text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-150">
-                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                                </svg>
-                                Create Agency
-                            </button>
-                        </div>
-                    </form>
+                    @endif
                 </div>
             </div>
         </div>
     </div>
 
     @push('scripts')
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Location hierarchy loader
-        class LocationLoader {
-            constructor() {
-                this.countrySelect = document.getElementById('id_country');
-                this.regionSelect = document.getElementById('id_region');
-                this.subRegionSelect = document.getElementById('id_sub_region');
-                this.citySelect = document.getElementById('id_city');
-                this.coordSelect = document.getElementById('id_coord');
-                this.loadingEl = document.getElementById('coordinates-loading');
+        <script>
+            (function() {
+                // Dependent dropdowns for location
+                const countrySelect = document.getElementById('id_country');
+                const regionSelect = document.getElementById('id_region');
+                const subRegionSelect = document.getElementById('id_sub_region');
+                const citySelect = document.getElementById('id_city');
+                const coordSelect = document.getElementById('id_coord');
 
-                this.init();
-            }
+                if (countrySelect && regionSelect) {
+                    // Filter regions by country
+                    countrySelect.addEventListener('change', function() {
+                        const countryId = this.value;
 
-            init() {
-                if (this.countrySelect) {
-                    this.countrySelect.addEventListener('change', () => this.loadRegions());
-                }
-                if (this.regionSelect) {
-                    this.regionSelect.addEventListener('change', () => this.loadSubRegions());
-                }
-                if (this.subRegionSelect) {
-                    this.subRegionSelect.addEventListener('change', () => this.loadCities());
-                }
-                if (this.citySelect) {
-                    this.citySelect.addEventListener('change', () => this.loadCoordinates());
-                }
+                        // Reset dependent selects
+                        regionSelect.innerHTML = '<option value="">Select Region</option>';
+                        subRegionSelect.innerHTML = '<option value="">Select Sub Region</option>';
+                        citySelect.innerHTML = '<option value="">Select City</option>';
+                        coordSelect.innerHTML = '<option value="">Select Coordinates</option>';
 
-                // Load initial data if country is preselected
-                if (this.countrySelect && this.countrySelect.value) {
-                    this.loadRegions();
-                }
-            }
-
-            async loadRegions() {
-                const countryId = this.countrySelect.value;
-                if (!countryId) {
-                    this.disableSelect(this.regionSelect, '-- Select Country First --');
-                    this.disableSelect(this.subRegionSelect, '-- Select Region First --');
-                    this.disableSelect(this.citySelect, '-- Select Sub Region First --');
-                    this.disableSelect(this.coordSelect, '-- Select City First --');
-                    return;
+                        if (countryId) {
+                            const regions = @json($regions ?? []);
+                            regions.forEach(region => {
+                                if (region.id_country == countryId) {
+                                    const option = document.createElement('option');
+                                    option.value = region.id_region;
+                                    option.textContent = region.name;
+                                    regionSelect.appendChild(option);
+                                }
+                            });
+                        }
+                    });
                 }
 
-                this.regionSelect.disabled = true;
-                this.regionSelect.innerHTML = '<option value="">Loading regions...</option>';
+                if (regionSelect && subRegionSelect) {
+                    // Filter sub regions by region
+                    regionSelect.addEventListener('change', function() {
+                        const regionId = this.value;
 
-                try {
-                    const response = await fetch(`/api/regions?country_id=${countryId}`);
-                    const data = await response.json();
+                        // Reset dependent selects
+                        subRegionSelect.innerHTML = '<option value="">Select Sub Region</option>';
+                        citySelect.innerHTML = '<option value="">Select City</option>';
+                        coordSelect.innerHTML = '<option value="">Select Coordinates</option>';
 
-                    this.regionSelect.innerHTML = '<option value="">-- Select Region --</option>';
-                    if (data.data && data.data.length > 0) {
-                        data.data.forEach(region => {
-                            const option = document.createElement('option');
-                            option.value = region.id_region;
-                            option.textContent = region.name;
-                            if (region.id_region == '{{ old('id_region') }}') {
-                                option.selected = true;
-                            }
-                            this.regionSelect.appendChild(option);
-                        });
-                        this.regionSelect.disabled = false;
-                    } else {
-                        this.regionSelect.innerHTML = '<option value="">No regions available</option>';
+                        if (regionId) {
+                            const subRegions = @json($subRegions ?? []);
+                            subRegions.forEach(subRegion => {
+                                if (subRegion.id_region == regionId) {
+                                    const option = document.createElement('option');
+                                    option.value = subRegion.id_sub_region;
+                                    option.textContent = subRegion.name;
+                                    subRegionSelect.appendChild(option);
+                                }
+                            });
+                        }
+                    });
+                }
+
+                if (subRegionSelect && citySelect) {
+                    // Filter cities by sub region
+                    subRegionSelect.addEventListener('change', function() {
+                        const subRegionId = this.value;
+
+                        // Reset dependent selects
+                        citySelect.innerHTML = '<option value="">Select City</option>';
+                        coordSelect.innerHTML = '<option value="">Select Coordinates</option>';
+
+                        if (subRegionId) {
+                            const cities = @json($cities ?? []);
+                            cities.forEach(city => {
+                                if (city.id_sub_region == subRegionId) {
+                                    const option = document.createElement('option');
+                                    option.value = city.id_city;
+                                    option.textContent = city.name;
+                                    citySelect.appendChild(option);
+                                }
+                            });
+                        }
+                    });
+                }
+
+                if (citySelect && coordSelect) {
+                    // Fetch coordinates when city is selected
+                    citySelect.addEventListener('change', function() {
+                        const cityId = this.value;
+
+                        // Reset coordinates
+                        coordSelect.innerHTML = '<option value="">Select Coordinates</option>';
+
+                        if (cityId) {
+                            fetch(`/api/cities/${cityId}/coordinates`)
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.data && data.data.length > 0) {
+                                        data.data.forEach(coord => {
+                                            const option = document.createElement('option');
+                                            option.value = coord.id_coord;
+                                            option.textContent = `${coord.address || 'Location'} (${coord.latitude}, ${coord.longitude})`;
+                                            coordSelect.appendChild(option);
+                                        });
+                                    }
+                                })
+                                .catch(error => console.error('Error fetching coordinates:', error));
+                        }
+                    });
+                }
+
+                // Password confirmation validation
+                const password = document.getElementById('admin_password');
+                const confirmPassword = document.getElementById('admin_password_confirmation');
+
+                if (password && confirmPassword) {
+                    function validatePassword() {
+                        if (password.value !== confirmPassword.value) {
+                            confirmPassword.setCustomValidity('Passwords do not match');
+                            confirmPassword.classList.add('border-red-500');
+                        } else {
+                            confirmPassword.setCustomValidity('');
+                            confirmPassword.classList.remove('border-red-500');
+                        }
                     }
-                } catch (error) {
-                    console.error('Error loading regions:', error);
-                    this.regionSelect.innerHTML = '<option value="">Error loading regions</option>';
+
+                    password.addEventListener('change', validatePassword);
+                    confirmPassword.addEventListener('keyup', validatePassword);
                 }
 
-                this.disableSelect(this.subRegionSelect, '-- Select Region First --');
-                this.disableSelect(this.citySelect, '-- Select Sub Region First --');
-                this.disableSelect(this.coordSelect, '-- Select City First --');
-            }
+                // Unsaved changes warning
+                const form = document.querySelector('form');
+                let formChanged = false;
 
-            async loadSubRegions() {
-                const regionId = this.regionSelect.value;
-                if (!regionId) {
-                    this.disableSelect(this.subRegionSelect, '-- Select Region First --');
-                    this.disableSelect(this.citySelect, '-- Select Sub Region First --');
-                    this.disableSelect(this.coordSelect, '-- Select City First --');
-                    return;
+                if (form) {
+                    const formInputs = form.querySelectorAll('input:not([type="hidden"]), select, textarea');
+
+                    formInputs.forEach(input => {
+                        input.addEventListener('change', () => { formChanged = true; });
+                        input.addEventListener('input', () => { formChanged = true; });
+                    });
+
+                    window.addEventListener('beforeunload', function(e) {
+                        if (formChanged) {
+                            e.preventDefault();
+                            e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+                        }
+                    });
+
+                    form.addEventListener('submit', function() {
+                        formChanged = false;
+                    });
                 }
-
-                this.subRegionSelect.disabled = true;
-                this.subRegionSelect.innerHTML = '<option value="">Loading sub regions...</option>';
-
-                try {
-                    const response = await fetch(`/api/sub-regions?region_id=${regionId}`);
-                    const data = await response.json();
-
-                    this.subRegionSelect.innerHTML = '<option value="">-- Select Sub Region --</option>';
-                    if (data.data && data.data.length > 0) {
-                        data.data.forEach(subRegion => {
-                            const option = document.createElement('option');
-                            option.value = subRegion.id_sub_region;
-                            option.textContent = subRegion.name;
-                            if (subRegion.id_sub_region == '{{ old('id_sub_region') }}') {
-                                option.selected = true;
-                            }
-                            this.subRegionSelect.appendChild(option);
-                        });
-                        this.subRegionSelect.disabled = false;
-                    } else {
-                        this.subRegionSelect.innerHTML = '<option value="">No sub regions available</option>';
-                    }
-                } catch (error) {
-                    console.error('Error loading sub regions:', error);
-                    this.subRegionSelect.innerHTML = '<option value="">Error loading sub regions</option>';
-                }
-
-                this.disableSelect(this.citySelect, '-- Select Sub Region First --');
-                this.disableSelect(this.coordSelect, '-- Select City First --');
-            }
-
-            async loadCities() {
-                const subRegionId = this.subRegionSelect.value;
-                if (!subRegionId) {
-                    this.disableSelect(this.citySelect, '-- Select Sub Region First --');
-                    this.disableSelect(this.coordSelect, '-- Select City First --');
-                    return;
-                }
-
-                this.citySelect.disabled = true;
-                this.citySelect.innerHTML = '<option value="">Loading cities...</option>';
-
-                try {
-                    const response = await fetch(`/api/cities?sub_region_id=${subRegionId}`);
-                    const data = await response.json();
-
-                    this.citySelect.innerHTML = '<option value="">-- Select City --</option>';
-                    if (data.data && data.data.length > 0) {
-                        data.data.forEach(city => {
-                            const option = document.createElement('option');
-                            option.value = city.id_city;
-                            option.textContent = city.name;
-                            if (city.id_city == '{{ old('id_city') }}') {
-                                option.selected = true;
-                            }
-                            this.citySelect.appendChild(option);
-                        });
-                        this.citySelect.disabled = false;
-                    } else {
-                        this.citySelect.innerHTML = '<option value="">No cities available</option>';
-                    }
-                } catch (error) {
-                    console.error('Error loading cities:', error);
-                    this.citySelect.innerHTML = '<option value="">Error loading cities</option>';
-                }
-
-                this.disableSelect(this.coordSelect, '-- Select City First --');
-            }
-
-            async loadCoordinates() {
-                const cityId = this.citySelect.value;
-                if (!cityId) {
-                    this.disableSelect(this.coordSelect, '-- Select City First --');
-                    return;
-                }
-
-                this.coordSelect.disabled = true;
-                this.coordSelect.innerHTML = '<option value="">Loading addresses...</option>';
-                if (this.loadingEl) this.loadingEl.classList.remove('hidden');
-
-                try {
-                    const response = await fetch(`/api/coordinates?city_id=${cityId}`);
-                    const data = await response.json();
-
-                    this.coordSelect.innerHTML = '<option value="">-- Select Address --</option>';
-                    if (data.data && data.data.length > 0) {
-                        data.data.forEach(coord => {
-                            const option = document.createElement('option');
-                            option.value = coord.id_coord;
-                            option.textContent = coord.address;
-                            if (coord.id_coord == '{{ old('id_coord') }}') {
-                                option.selected = true;
-                            }
-                            this.coordSelect.appendChild(option);
-                        });
-                        this.coordSelect.disabled = false;
-                    } else {
-                        this.coordSelect.innerHTML = '<option value="">No addresses available</option>';
-                    }
-                } catch (error) {
-                    console.error('Error loading coordinates:', error);
-                    this.coordSelect.innerHTML = '<option value="">Error loading addresses</option>';
-                } finally {
-                    if (this.loadingEl) this.loadingEl.classList.add('hidden');
-                }
-            }
-
-            disableSelect(select, placeholder) {
-                if (select) {
-                    select.disabled = true;
-                    select.innerHTML = `<option value="">${placeholder}</option>`;
-                }
-            }
-        }
-
-        // Initialize location loader
-        new LocationLoader();
-    });
-    </script>
+            })();
+        </script>
     @endpush
 </x-app-layout>

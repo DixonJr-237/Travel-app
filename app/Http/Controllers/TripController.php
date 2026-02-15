@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Web;
+namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\Agency;
@@ -12,6 +12,8 @@ use App\Models\Tips;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Log; // Add this line
+use Carbon\Carbon; // Add this if you're using Carbon
 
 class TripController extends Controller
 {
@@ -24,39 +26,133 @@ class TripController extends Controller
     }
 
     public function index(Request $request)
-    {
+{
+    try {
         $user = auth()->user();
-        $query = Tips::with(['journey', 'bus', 'bus.agency']);
+
+        // Start with the Tips model (not Trip)
+        $query = Tips::with([
+            'journey.departureLocation.city',
+            'journey.arrivalLocation.city',
+            'bus.agency.company'
+        ]);
 
         // Filter by agency based on user role
         if ($user->role === 'agency_admin') {
-            $query->whereIn('bus_id', function ($q) use ($user) {
-                $q->select('bus_id')
-                    ->from('buses')
-                    ->where('agency_id', $user->agency_id);
+            $agencyId = $user->agency_id ?? null;
+
+            if (!$agencyId) {
+                Log::warning('Agency admin has no agency_id', ['user_id' => $user->user_id]);
+                $tips = collect([]); // Empty collection
+                return view('trips.index', compact('tips'))->with('error', 'No agency associated with your account');
+            }
+
+            $query->whereHas('bus', function ($q) use ($agencyId) {
+                $q->where('agency_id', $agencyId);
             });
+
         } elseif ($user->role === 'company_admin') {
-            $query->whereIn('bus_id', function ($q) use ($user) {
-                $q->select('b.bus_id')
-                    ->from('buses as b')
-                    ->join('agencies as a', 'a.id_agence', '=', 'b.agency_id')
-                    ->where('a.id_company', $user->company_id);
+            $companyId = $user->company_id ?? null;
+
+            if (!$companyId) {
+                Log::warning('Company admin has no company_id', ['user_id' => $user->user_id]);
+                $tips = collect([]);
+                return view('trips.index', compact('tips'))->with('error', 'No company associated with your account');
+            }
+
+            $query->whereHas('bus.agency', function ($q) use ($companyId) {
+                $q->where('id_company', $companyId);
             });
         }
 
-        if ($request->has('departure_date')) {
-            $query->whereDate('departure_date', $request->departure_date);
+        // Apply filters with validation
+        if ($request->has('departure_date') && !empty($request->departure_date)) {
+            try {
+                $date = Carbon::parse($request->departure_date)->format('Y-m-d');
+                $query->whereDate('departure_date', $date);
+            } catch (\Exception $e) {
+                Log::warning('Invalid date format', ['date' => $request->departure_date]);
+                // Continue without date filter
+            }
         }
 
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
+        if ($request->has('status') && !empty($request->status)) {
+            $validStatuses = ['scheduled', 'in_progress', 'completed', 'cancelled', 'active'];
+            if (in_array($request->status, $validStatuses)) {
+                $query->where('status', $request->status);
+            }
         }
 
-        $tips = $query->orderBy('departure_date', 'desc')->paginate(20);
+        // Search functionality
+        if ($request->has('search') && !empty($request->search)) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('bus', function ($busQuery) use ($search) {
+                    $busQuery->where('registration_number', 'LIKE', "%{$search}%")
+                        ->orWhere('bus_number', 'LIKE', "%{$search}%");
+                })->orWhereHas('journey.departureLocation.city', function ($cityQuery) use ($search) {
+                    $cityQuery->where('name', 'LIKE', "%{$search}%");
+                })->orWhereHas('journey.arrivalLocation.city', function ($cityQuery) use ($search) {
+                    $cityQuery->where('name', 'LIKE', "%{$search}%");
+                });
+            });
+        }
 
-        return view('trips.index', compact('trips'));
+        // Date range filter
+        if ($request->has('date_from') && !empty($request->date_from)) {
+            try {
+                $query->whereDate('departure_date', '>=', Carbon::parse($request->date_from));
+            } catch (\Exception $e) {
+                // Ignore invalid date
+            }
+        }
+
+        if ($request->has('date_to') && !empty($request->date_to)) {
+            try {
+                $query->whereDate('departure_date', '<=', Carbon::parse($request->date_to));
+            } catch (\Exception $e) {
+                // Ignore invalid date
+            }
+        }
+
+        // Get paginated results
+        $tips = $query->orderBy('departure_date', 'desc')
+            ->orderBy('departure_time', 'desc')
+            ->paginate(20)
+            ->withQueryString(); // Preserve query parameters in pagination links
+
+        // Add additional data for the view
+        $statusCounts = [
+            'total' => Tips::count(),
+            'scheduled' => Tips::where('status', 'scheduled')->count(),
+            'in_progress' => Tips::where('status', 'in_progress')->count(),
+            'completed' => Tips::where('status', 'completed')->count(),
+            'cancelled' => Tips::where('status', 'cancelled')->count(),
+        ];
+
+        return view('trips.index', [
+            'tips' => $tips,
+            'filters' => $request->only(['departure_date', 'status', 'search', 'date_from', 'date_to']),
+            'statusCounts' => $statusCounts,
+            'userRole' => $user->role,
+        ]);
+
+    } catch (\Exception $e) {
+        // Log the error with details
+        Log::error('Error in TripController@index', [
+            'message' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'user_id' => auth()->id() ?? null,
+            'url' => $request->fullUrl()
+        ]);
+
+        // Return error view or empty results
+        return view('trips.index', [
+            'tips' => collect([]),
+            'error' => 'An error occurred while loading trips. Please try again.'
+        ])->withErrors(['error' => 'Unable to load trips. Please try again later.']);
     }
-
+}
     public function create()
     {
         $user = auth()->user();

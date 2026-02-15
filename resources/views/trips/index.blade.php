@@ -1,20 +1,33 @@
 <x-app-layout>
     <x-slot name="header">
         <div class="flex justify-between items-center">
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                Trips
-            </h2>
-            @can('create', App\Models\Trip::class)
-                <a href="{{ route('trips.create') }}"
+            <div>
+                <h2 class="font-semibold text-xl text-gray-800 leading-tight">Trips Management</h2>
+                <p class="text-sm text-gray-600 mt-1">Manage your scheduled trips and routes</p>
+            </div>
+
+            @php
+                $user = auth()->user();
+                $createRoute = match($user->role) {
+                    'super_admin' => 'admin.trips.create',
+                    'company_admin' => 'my-company.trips.create',
+                    'agency_admin' => 'my-agency.trips.create',
+                    default => null
+                };
+            @endphp
+
+            @if($createRoute && Route::has($createRoute))
+                <a href="{{ route($createRoute) }}"
                    class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 focus:bg-blue-700 active:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition ease-in-out duration-150">
-                    <i class="fas fa-plus mr-2"></i> Schedule Trip
+                    <i class="fas fa-plus mr-2"></i> Schedule New Trip
                 </a>
-            @endcan
+            @endif
         </div>
     </x-slot>
 
     <div class="py-12">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+
             <!-- Quick Stats -->
             <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
                 <div class="bg-white overflow-hidden shadow rounded-lg">
@@ -25,7 +38,9 @@
                             </div>
                             <div class="ml-4">
                                 <p class="text-sm font-medium text-gray-500">Total Trips</p>
-                                <p class="text-2xl font-semibold text-gray-900">{{ $trips->total() }}</p>
+                                <p class="text-2xl font-semibold text-gray-900">
+                                    {{ $statusCounts['total'] ?? ($tips instanceof \Illuminate\Pagination\LengthAwarePaginator ? $tips->total() : $tips->count()) ?? 0 }}
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -40,7 +55,7 @@
                             <div class="ml-4">
                                 <p class="text-sm font-medium text-gray-500">Today's Trips</p>
                                 <p class="text-2xl font-semibold text-gray-900">
-                                    {{ $todayTripsCount ?? 0 }}
+                                    {{ $todayTripsCount ?? \App\Models\Tips::whereDate('departure_date', today())->count() }}
                                 </p>
                             </div>
                         </div>
@@ -56,7 +71,7 @@
                             <div class="ml-4">
                                 <p class="text-sm font-medium text-gray-500">Active Buses</p>
                                 <p class="text-2xl font-semibold text-gray-900">
-                                    {{ \App\Models\Bus::where('status', 'active')->count() }}
+                                    {{ $activeBusesCount ?? \App\Models\Bus::where('status', 'active')->count() }}
                                 </p>
                             </div>
                         </div>
@@ -72,7 +87,7 @@
                             <div class="ml-4">
                                 <p class="text-sm font-medium text-gray-500">Available Seats</p>
                                 <p class="text-2xl font-semibold text-gray-900">
-                                    {{ \App\Models\Trip::where('departure_date', '>=', now())->sum('available_seats') }}
+                                    {{ $availableSeatsCount ?? \App\Models\Tips::where('departure_date', '>=', now())->sum('available_seats') }}
                                 </p>
                             </div>
                         </div>
@@ -80,10 +95,38 @@
                 </div>
             </div>
 
+            <!-- Error Message Display -->
+            @if(isset($error) && $error)
+                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-6" role="alert">
+                    <strong class="font-bold">Error!</strong>
+                    <span class="block sm:inline">{{ $error }}</span>
+                </div>
+            @endif
+
+            @if($errors->any())
+                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-6" role="alert">
+                    <strong class="font-bold">Please fix the following errors:</strong>
+                    <ul class="mt-2 list-disc list-inside">
+                        @foreach($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
             <!-- Filters and Search -->
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-6">
                 <div class="p-6">
-                    <form method="GET" action="{{ route('trips.index') }}" class="space-y-4">
+                    @php
+                        $indexRoute = match($user->role) {
+                            'super_admin' => 'admin.trips.index',
+                            'company_admin' => 'my-company.trips.index',
+                            'agency_admin' => 'my-agency.trips.index',
+                            default => 'admin.trips.index'
+                        };
+                    @endphp
+
+                    <form method="GET" action="{{ Route::has($indexRoute) ? route($indexRoute) : '#' }}" class="space-y-4">
                         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <!-- Departure Date -->
                             <div>
@@ -95,36 +138,15 @@
                                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                             </div>
 
-                            <!-- Departure Location -->
+                            <!-- Search -->
                             <div>
-                                <label for="departure_location" class="block text-sm font-medium text-gray-700 mb-1">From</label>
-                                <select name="departure_location"
-                                        id="departure_location"
-                                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                                    <option value="">All Departures</option>
-                                    @foreach($coordinates as $coord)
-                                        <option value="{{ $coord->id_coord }}"
-                                                {{ request('departure_location') == $coord->id_coord ? 'selected' : '' }}>
-                                            {{ $coord->city->name ?? 'Unknown' }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-
-                            <!-- Arrival Location -->
-                            <div>
-                                <label for="arrival_location" class="block text-sm font-medium text-gray-700 mb-1">To</label>
-                                <select name="arrival_location"
-                                        id="arrival_location"
-                                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                                    <option value="">All Arrivals</option>
-                                    @foreach($coordinates as $coord)
-                                        <option value="{{ $coord->id_coord }}"
-                                                {{ request('arrival_location') == $coord->id_coord ? 'selected' : '' }}>
-                                            {{ $coord->city->name ?? 'Unknown' }}
-                                        </option>
-                                    @endforeach
-                                </select>
+                                <label for="search" class="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                                <input type="text"
+                                       name="search"
+                                       id="search"
+                                       value="{{ request('search') }}"
+                                       placeholder="Route, bus number..."
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                             </div>
 
                             <!-- Status -->
@@ -138,44 +160,47 @@
                                     <option value="in_progress" {{ request('status') == 'in_progress' ? 'selected' : '' }}>In Progress</option>
                                     <option value="completed" {{ request('status') == 'completed' ? 'selected' : '' }}>Completed</option>
                                     <option value="cancelled" {{ request('status') == 'cancelled' ? 'selected' : '' }}>Cancelled</option>
+                                    <option value="active" {{ request('status') == 'active' ? 'selected' : '' }}>Active</option>
                                 </select>
+                            </div>
+
+                            <!-- Date From -->
+                            <div>
+                                <label for="date_from" class="block text-sm font-medium text-gray-700 mb-1">Date From</label>
+                                <input type="date"
+                                       name="date_from"
+                                       id="date_from"
+                                       value="{{ request('date_from') }}"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                             </div>
                         </div>
 
-                        <!-- Additional Filters -->
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <!-- Company Filter (for super admin) -->
-                            @if(auth()->user()->role === 'super_admin')
-                                <div>
-                                    <label for="company_id" class="block text-sm font-medium text-gray-700 mb-1">Company</label>
-                                    <select name="company_id"
-                                            id="company_id"
-                                            class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                                        <option value="">All Companies</option>
-                                        @foreach(\App\Models\Company::all() as $company)
-                                            <option value="{{ $company->id_company }}"
-                                                    {{ request('company_id') == $company->id_company ? 'selected' : '' }}>
-                                                {{ $company->name }}
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                            @endif
+                            <!-- Date To -->
+                            <div>
+                                <label for="date_to" class="block text-sm font-medium text-gray-700 mb-1">Date To</label>
+                                <input type="date"
+                                       name="date_to"
+                                       id="date_to"
+                                       value="{{ request('date_to') }}"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                            </div>
 
-                            <!-- Agency Filter -->
-                            @if(auth()->user()->role === 'super_admin' || auth()->user()->role === 'company_admin')
+                            <!-- Agency Filter (for super admin and company admin) -->
+                            @if(in_array($user->role, ['super_admin', 'company_admin']))
                                 <div>
                                     <label for="agency_id" class="block text-sm font-medium text-gray-700 mb-1">Agency</label>
                                     <select name="agency_id"
                                             id="agency_id"
                                             class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                                         <option value="">All Agencies</option>
-                                        @foreach(\App\Models\Agency::when(auth()->user()->company_id, function($q) {
-                                            $q->where('id_company', auth()->user()->company_id);
-                                        })->get() as $agency)
+                                        @foreach($agencies ?? [] as $agency)
                                             <option value="{{ $agency->id_agence }}"
                                                     {{ request('agency_id') == $agency->id_agence ? 'selected' : '' }}>
                                                 {{ $agency->name }}
+                                                @if($user->role === 'super_admin' && $agency->company)
+                                                    ({{ $agency->company->name }})
+                                                @endif
                                             </option>
                                         @endforeach
                                     </select>
@@ -189,9 +214,7 @@
                                         id="bus_id"
                                         class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                                     <option value="">All Buses</option>
-                                    @foreach(\App\Models\Bus::when(request('agency_id'), function($q) {
-                                        $q->where('agency_id', request('agency_id'));
-                                    })->get() as $bus)
+                                    @foreach($buses ?? [] as $bus)
                                         <option value="{{ $bus->bus_id }}"
                                                 {{ request('bus_id') == $bus->bus_id ? 'selected' : '' }}>
                                             {{ $bus->registration_number }}
@@ -203,9 +226,9 @@
 
                         <!-- Action Buttons -->
                         <div class="flex justify-end space-x-3">
-                            <a href="{{ route('trips.index') }}"
-                               class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                Clear Filters
+                            <a href="{{ Route::has($indexRoute) ? route($indexRoute) : '#' }}"
+                               class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                                <i class="fas fa-times mr-2"></i> Clear Filters
                             </a>
                             <button type="submit"
                                     class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 focus:bg-blue-700 active:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
@@ -215,6 +238,32 @@
                     </form>
                 </div>
             </div>
+
+            <!-- Status Summary Cards -->
+            @if(isset($statusCounts))
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                <div class="bg-blue-50 rounded-lg p-3 text-center">
+                    <span class="text-xs text-gray-600">Total</span>
+                    <span class="block text-lg font-bold text-blue-600">{{ $statusCounts['total'] }}</span>
+                </div>
+                <div class="bg-green-50 rounded-lg p-3 text-center">
+                    <span class="text-xs text-gray-600">Scheduled</span>
+                    <span class="block text-lg font-bold text-green-600">{{ $statusCounts['scheduled'] }}</span>
+                </div>
+                <div class="bg-yellow-50 rounded-lg p-3 text-center">
+                    <span class="text-xs text-gray-600">In Progress</span>
+                    <span class="block text-lg font-bold text-yellow-600">{{ $statusCounts['in_progress'] }}</span>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-3 text-center">
+                    <span class="text-xs text-gray-600">Completed</span>
+                    <span class="block text-lg font-bold text-gray-600">{{ $statusCounts['completed'] }}</span>
+                </div>
+                <div class="bg-red-50 rounded-lg p-3 text-center">
+                    <span class="text-xs text-gray-600">Cancelled</span>
+                    <span class="block text-lg font-bold text-red-600">{{ $statusCounts['cancelled'] }}</span>
+                </div>
+            </div>
+            @endif
 
             <!-- Trips Table -->
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
@@ -231,7 +280,7 @@
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
-                            @forelse($trips as $trip)
+                            @forelse($tips ?? [] as $trip)
                                 <tr class="hover:bg-gray-50">
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <div class="flex items-center">
@@ -240,77 +289,106 @@
                                             </div>
                                             <div class="ml-4">
                                                 <div class="text-sm font-medium text-gray-900">
-                                                    {{ $trip->departureLocation->city->name ?? 'Unknown' }} →
-                                                    {{ $trip->arrivalLocation->city->name ?? 'Unknown' }}
+                                                    {{ optional($trip->journey->departureLocation->city)->name ?? 'Unknown' }} →
+                                                    {{ optional($trip->journey->arrivalLocation->city)->name ?? 'Unknown' }}
                                                 </div>
                                                 <div class="text-sm text-gray-500">{{ $trip->journey->name ?? 'N/A' }}</div>
                                             </div>
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        <div class="text-sm font-medium text-gray-900">{{ $trip->departure_date->format('M d, Y') }}</div>
-                                        <div class="text-sm text-gray-500">{{ $trip->departure_time }}</div>
-                                        <div class="text-xs text-gray-400 mt-1">
-                                            {{ $trip->departure_date->diffForHumans() }}
+                                        <div class="text-sm font-medium text-gray-900">
+                                            {{ $trip->departure_date ? \Carbon\Carbon::parse($trip->departure_date)->format('M d, Y') : 'N/A' }}
                                         </div>
+                                        <div class="text-sm text-gray-500">{{ $trip->departure_time ?? 'N/A' }}</div>
+                                        @if($trip->departure_date)
+                                            <div class="text-xs text-gray-400 mt-1">
+                                                {{ \Carbon\Carbon::parse($trip->departure_date)->diffForHumans() }}
+                                            </div>
+                                        @endif
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        <div class="text-sm font-medium text-gray-900">{{ $trip->bus->registration_number }}</div>
+                                        <div class="text-sm font-medium text-gray-900">{{ $trip->bus->registration_number ?? 'N/A' }}</div>
                                         <div class="text-sm text-gray-500">{{ $trip->bus->agency->name ?? 'N/A' }}</div>
                                         <div class="text-xs text-gray-400">{{ $trip->bus->model ?? 'N/A' }}</div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <div class="flex items-center space-x-4">
                                             <div>
-                                                <div class="text-sm font-medium text-gray-900">{{ $trip->available_seats }}</div>
+                                                <div class="text-sm font-medium text-gray-900">{{ $trip->available_seats ?? 0 }}</div>
                                                 <div class="text-xs text-gray-500">available</div>
                                             </div>
                                             <div class="text-gray-300">|</div>
                                             <div>
                                                 <div class="text-sm font-medium text-gray-900">
-                                                    {{ number_format($trip->initial_price, 0, '.', ',') }} FCFA
+                                                    {{ number_format($trip->initial_price ?? 0, 0, '.', ',') }} FCFA
                                                 </div>
                                                 <div class="text-xs text-gray-500">per seat</div>
                                             </div>
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                                            @if($trip->status === 'scheduled') bg-green-100 text-green-800
-                                            @elseif($trip->status === 'in_progress') bg-blue-100 text-blue-800
-                                            @elseif($trip->status === 'completed') bg-gray-100 text-gray-800
-                                            @else bg-red-100 text-red-800 @endif">
-                                            {{ ucfirst($trip->status) }}
+                                        @php
+                                            $statusColors = [
+                                                'scheduled' => 'bg-green-100 text-green-800',
+                                                'in_progress' => 'bg-blue-100 text-blue-800',
+                                                'active' => 'bg-purple-100 text-purple-800',
+                                                'completed' => 'bg-gray-100 text-gray-800',
+                                                'cancelled' => 'bg-red-100 text-red-800',
+                                                'default' => 'bg-gray-100 text-gray-800'
+                                            ];
+                                            $statusColor = $statusColors[$trip->status] ?? $statusColors['default'];
+                                        @endphp
+                                        <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full {{ $statusColor }}">
+                                            {{ ucfirst(str_replace('_', ' ', $trip->status ?? 'unknown')) }}
                                         </span>
-                                        @if($trip->departure_date < now() && $trip->status === 'scheduled')
+                                        @if($trip->departure_date && \Carbon\Carbon::parse($trip->departure_date) < now() && $trip->status === 'scheduled')
                                             <div class="text-xs text-red-600 mt-1">
                                                 <i class="fas fa-exclamation-circle mr-1"></i> Departure time passed
                                             </div>
                                         @endif
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        <div class="flex space-x-2">
-                                            <a href="{{ route('trips.show', $trip) }}"
-                                               class="text-blue-600 hover:text-blue-900"
-                                               title="View Details">
-                                                <i class="fas fa-eye"></i>
-                                            </a>
-                                            @can('update', $trip)
-                                                <a href="{{ route('trips.edit', $trip) }}"
+                                        @php
+                                            $showRoute = match($user->role) {
+                                                'super_admin' => 'admin.trips.show',
+                                                'company_admin' => 'my-company.trips.show',
+                                                'agency_admin' => 'my-agency.trips.show',
+                                                default => null
+                                            };
+                                            $editRoute = match($user->role) {
+                                                'super_admin' => 'admin.trips.edit',
+                                                'company_admin' => 'my-company.trips.edit',
+                                                'agency_admin' => 'my-agency.trips.edit',
+                                                default => null
+                                            };
+                                            $destroyRoute = match($user->role) {
+                                                'super_admin' => 'admin.trips.destroy',
+                                                'company_admin' => 'my-company.trips.destroy',
+                                                'agency_admin' => 'my-agency.trips.destroy',
+                                                default => null
+                                            };
+                                        @endphp
+
+                                        <div class="flex space-x-3">
+                                            @if($showRoute && Route::has($showRoute))
+                                                <a href="{{ route($showRoute, $trip->id_tips ?? $trip->id) }}"
+                                                   class="text-blue-600 hover:text-blue-900"
+                                                   title="View Details">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                            @endif
+
+                                            @if($editRoute && Route::has($editRoute))
+                                                <a href="{{ route($editRoute, $trip->id_tips ?? $trip->id) }}"
                                                    class="text-green-600 hover:text-green-900"
                                                    title="Edit">
                                                     <i class="fas fa-edit"></i>
                                                 </a>
-                                            @endcan
-                                            @if($trip->status === 'scheduled')
-                                                <a href="{{ route('tickets.create', ['trip_id' => $trip->trip_id]) }}"
-                                                   class="text-yellow-600 hover:text-yellow-900"
-                                                   title="Sell Ticket">
-                                                    <i class="fas fa-ticket-alt"></i>
-                                                </a>
                                             @endif
-                                            @can('delete', $trip)
-                                                <form action="{{ route('trips.destroy', $trip) }}"
+
+                                            @if($destroyRoute && Route::has($destroyRoute))
+                                                <form action="{{ route($destroyRoute, $trip->id_tips ?? $trip->id) }}"
                                                       method="POST"
                                                       class="inline"
                                                       onsubmit="return confirm('Are you sure you want to delete this trip?');">
@@ -322,7 +400,7 @@
                                                         <i class="fas fa-trash"></i>
                                                     </button>
                                                 </form>
-                                            @endcan
+                                            @endif
                                         </div>
                                     </td>
                                 </tr>
@@ -330,15 +408,29 @@
                                 <tr>
                                     <td colspan="6" class="px-6 py-12 text-center">
                                         <div class="flex flex-col items-center">
-                                            <i class="fas fa-route text-4xl text-gray-300 mb-3"></i>
+                                            <div class="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                                                <i class="fas fa-route text-4xl text-gray-400"></i>
+                                            </div>
                                             <h3 class="text-lg font-medium text-gray-900 mb-2">No Trips Found</h3>
-                                            <p class="text-gray-500 mb-4">Try adjusting your search filters or create a new trip</p>
-                                            @can('create', App\Models\Trip::class)
-                                                <a href="{{ route('trips.create') }}"
+                                            <p class="text-gray-500 mb-4 max-w-md">
+                                                @if(request()->anyFilled(['departure_date', 'search', 'status', 'date_from', 'date_to', 'agency_id', 'bus_id']))
+                                                    No trips match your current filters. Try adjusting your search criteria.
+                                                @else
+                                                    Get started by scheduling your first trip.
+                                                @endif
+                                            </p>
+
+                                            @if($createRoute && Route::has($createRoute) && !request()->anyFilled(['departure_date', 'search', 'status', 'date_from', 'date_to', 'agency_id', 'bus_id']))
+                                                <a href="{{ route($createRoute) }}"
                                                    class="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700">
-                                                    <i class="fas fa-plus mr-2"></i> Schedule Trip
+                                                    <i class="fas fa-plus mr-2"></i> Schedule Your First Trip
                                                 </a>
-                                            @endcan
+                                            @elseif(request()->anyFilled(['departure_date', 'search', 'status', 'date_from', 'date_to', 'agency_id', 'bus_id']))
+                                                <a href="{{ Route::has($indexRoute) ? route($indexRoute) : '#' }}"
+                                                   class="inline-flex items-center px-4 py-2 bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700">
+                                                    <i class="fas fa-times mr-2"></i> Clear All Filters
+                                                </a>
+                                            @endif
                                         </div>
                                     </td>
                                 </tr>
@@ -347,130 +439,99 @@
                     </table>
                 </div>
 
-                <!-- Pagination -->
-                @if($trips->hasPages())
-                    <div class="px-6 py-4 bg-gray-50 border-t border-gray-200">
-                        {{ $trips->withQueryString()->links() }}
-                    </div>
+                <!-- Pagination - FIXED -->
+                @if(isset($tips))
+                    @if($tips instanceof \Illuminate\Pagination\LengthAwarePaginator && $tips->hasPages())
+                        <div class="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                            <div class="flex items-center justify-between">
+                                <div class="text-sm text-gray-700">
+                                    Showing <span class="font-medium">{{ $tips->firstItem() ?? 0 }}</span>
+                                    to <span class="font-medium">{{ $tips->lastItem() ?? 0 }}</span>
+                                    of <span class="font-medium">{{ $tips->total() }}</span> results
+                                </div>
+                                <div class="flex-1 flex justify-end">
+                                    {{ $tips->withQueryString()->links() }}
+                                </div>
+                            </div>
+                        </div>
+                    @elseif($tips instanceof \Illuminate\Support\Collection && $tips->count() > 0)
+                        <div class="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                            <div class="text-sm text-gray-600 text-center">
+                                Showing all {{ $tips->count() }} trips
+                            </div>
+                        </div>
+                    @endif
                 @endif
             </div>
 
-            <!-- Upcoming Trips Summary -->
-            <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-                <!-- Today's Trips -->
-                <div class="bg-white overflow-hidden shadow rounded-lg">
-                    <div class="px-4 py-5 sm:p-6">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Today's Trips</h3>
-                        @php
-                            $todayTrips = \App\Models\Trip::whereDate('departure_date', today())
-                                ->where('status', 'scheduled')
-                                ->count();
-                        @endphp
-                        <div class="text-center py-6">
-                            <div class="text-3xl font-bold text-blue-600 mb-2">{{ $todayTrips }}</div>
-                            <p class="text-gray-600">trips scheduled for today</p>
-                        </div>
-                        <div class="mt-4">
-                            <a href="{{ route('trips.index', ['departure_date' => today()->format('Y-m-d')]) }}"
-                               class="block text-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
-                                View Today's Trips
-                            </a>
+            <!-- Quick Stats Summary -->
+            @if(isset($tips) && $tips->count() > 0)
+                <div class="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="bg-white overflow-hidden shadow rounded-lg">
+                        <div class="p-4">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0 bg-blue-500 rounded-md p-2">
+                                    <i class="fas fa-calendar-check text-white"></i>
+                                </div>
+                                <div class="ml-3">
+                                    <p class="text-sm font-medium text-gray-500">Today's Trips</p>
+                                    <p class="text-lg font-semibold text-gray-900">
+                                        {{ $tips->where('departure_date', today()->format('Y-m-d'))->count() }}
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Tomorrow's Trips -->
-                <div class="bg-white overflow-hidden shadow rounded-lg">
-                    <div class="px-4 py-5 sm:p-6">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Tomorrow's Trips</h3>
-                        @php
-                            $tomorrowTrips = \App\Models\Trip::whereDate('departure_date', today()->addDay())
-                                ->where('status', 'scheduled')
-                                ->count();
-                        @endphp
-                        <div class="text-center py-6">
-                            <div class="text-3xl font-bold text-green-600 mb-2">{{ $tomorrowTrips }}</div>
-                            <p class="text-gray-600">trips scheduled for tomorrow</p>
-                        </div>
-                        <div class="mt-4">
-                            <a href="{{ route('trips.index', ['departure_date' => today()->addDay()->format('Y-m-d')]) }}"
-                               class="block text-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
-                                View Tomorrow's Trips
-                            </a>
+                    <div class="bg-white overflow-hidden shadow rounded-lg">
+                        <div class="p-4">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0 bg-green-500 rounded-md p-2">
+                                    <i class="fas fa-clock text-white"></i>
+                                </div>
+                                <div class="ml-3">
+                                    <p class="text-sm font-medium text-gray-500">Upcoming</p>
+                                    <p class="text-lg font-semibold text-gray-900">
+                                        {{ $tips->where('departure_date', '>', now())->count() }}
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- This Week's Trips -->
-                <div class="bg-white overflow-hidden shadow rounded-lg">
-                    <div class="px-4 py-5 sm:p-6">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">This Week's Trips</h3>
-                        @php
-                            $weekStart = today()->startOfWeek();
-                            $weekEnd = today()->endOfWeek();
-                            $weekTrips = \App\Models\Trip::whereBetween('departure_date', [$weekStart, $weekEnd])
-                                ->where('status', 'scheduled')
-                                ->count();
-                        @endphp
-                        <div class="text-center py-6">
-                            <div class="text-3xl font-bold text-purple-600 mb-2">{{ $weekTrips }}</div>
-                            <p class="text-gray-600">trips scheduled this week</p>
+                    <div class="bg-white overflow-hidden shadow rounded-lg">
+                        <div class="p-4">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0 bg-purple-500 rounded-md p-2">
+                                    <i class="fas fa-chair text-white"></i>
+                                </div>
+                                <div class="ml-3">
+                                    <p class="text-sm font-medium text-gray-500">Total Seats</p>
+                                    <p class="text-lg font-semibold text-gray-900">
+                                        {{ $tips->sum('available_seats') }}
+                                    </p>
+                                </div>
+                            </div>
                         </div>
-                        <div class="mt-4">
-                            <a href="{{ route('trips.index', ['departure_date_from' => $weekStart->format('Y-m-d'), 'departure_date_to' => $weekEnd->format('Y-m-d')]) }}"
-                               class="block text-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
-                                View This Week's Trips
-                            </a>
+                    </div>
+
+                    <div class="bg-white overflow-hidden shadow rounded-lg">
+                        <div class="p-4">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0 bg-yellow-500 rounded-md p-2">
+                                    <i class="fas fa-tag text-white"></i>
+                                </div>
+                                <div class="ml-3">
+                                    <p class="text-sm font-medium text-gray-500">Avg. Price</p>
+                                    <p class="text-lg font-semibold text-gray-900">
+                                        {{ number_format($tips->avg('initial_price') ?? 0, 0, '.', ',') }} FCFA
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            @endif
         </div>
     </div>
-
-    @push('scripts')
-        <script>
-            // Auto-update bus options based on agency selection
-            const agencySelect = document.getElementById('agency_id');
-            const busSelect = document.getElementById('bus_id');
-
-            if (agencySelect && busSelect) {
-                agencySelect.addEventListener('change', function() {
-                    const agencyId = this.value;
-
-                    // Clear existing options except the first one
-                    while (busSelect.options.length > 1) {
-                        busSelect.remove(1);
-                    }
-
-                    if (agencyId) {
-                        // Fetch buses for selected agency
-                        fetch(`/api/agencies/${agencyId}/buses`)
-                            .then(response => response.json())
-                            .then(data => {
-                                if (data.success && data.data.length > 0) {
-                                    data.data.forEach(bus => {
-                                        const option = document.createElement('option');
-                                        option.value = bus.bus_id;
-                                        option.textContent = bus.registration_number;
-                                        busSelect.appendChild(option);
-                                    });
-                                }
-                            })
-                            .catch(error => {
-                                console.error('Error fetching buses:', error);
-                            });
-                    }
-                });
-            }
-
-            // Set default date to today
-            document.addEventListener('DOMContentLoaded', function() {
-                const dateInput = document.getElementById('departure_date');
-                if (dateInput && !dateInput.value) {
-                    dateInput.value = new Date().toISOString().split('T')[0];
-                }
-            });
-        </script>
-    @endpush
 </x-app-layout>

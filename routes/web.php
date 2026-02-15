@@ -191,16 +191,94 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware(['role:' . ROLE_COMPANY_ADMIN])
             ->prefix('my-company')
             ->name('my-company.')
-            ->controller(CompanyController::class)
             ->group(function () {
-                Route::get('/', 'myCompany')->name('dashboard');
-                Route::get('/edit', 'editMyCompany')->name('edit');
-                Route::patch('/update', 'updateMyCompany')->name('update');
-                Route::get('/agencies', 'myAgencies')->name('agencies');
-                Route::get('/buses', 'myBuses')->name('buses');
-                Route::get('/trips', 'myTrips')->name('trips');
-                Route::get('/reports', 'myReports')->name('reports');
-                Route::get('/users', 'myUsers')->name('users');
+
+                // Company management
+                Route::controller(CompanyController::class)->group(function () {
+                    Route::get('/', 'myCompany')->name('dashboard');
+                    Route::get('/edit', 'editMyCompany')->name('edit');
+                    Route::patch('/update', 'updateMyCompany')->name('update');
+                    Route::get('/agencies', 'myAgencies')->name('agencies'); // This is the agencies route
+                    Route::get('/buses', 'myBuses')->name('buses');
+                    Route::get('/trips', 'myTrips')->name('trips');
+                    Route::get('/reports', 'myReports')->name('reports');
+                    Route::get('/users', 'myUsers')->name('users');
+                });
+
+                 // ============ AGENCIES MANAGEMENT ============
+            Route::resource('agencies', AgencyController::class)
+                ->names([
+                    'index' => 'agencies.index',
+                    'create' => 'agencies.create',
+                    'store' => 'agencies.store',
+                    'show' => 'agencies.show',
+                    'edit' => 'agencies.edit',
+                    'update' => 'agencies.update',
+                    'destroy' => 'agencies.destroy',
+                ]);
+
+            Route::controller(AgencyController::class)
+                ->prefix('agencies')
+                ->name('agencies.')
+                ->group(function () {
+                    Route::post('{agency}/activate', 'activate')->name('activate');
+                    Route::post('{agency}/deactivate', 'deactivate')->name('deactivate');
+                    Route::post('{agency}/suspend', 'suspend')->name('suspend');
+                    Route::post('bulk-action', 'bulkAction')->name('bulk-action');
+                    Route::get('export', 'export')->name('export');
+                    Route::get('search', 'search')->name('search');
+                    Route::get('{agency}/activities', 'activities')->name('activities');
+                });
+
+            // ============ BUSES MANAGEMENT ============
+            Route::resource('buses', BusController::class)
+                ->names([
+                    'index' => 'buses.index',
+                    'create' => 'buses.create',
+                    'store' => 'buses.store',
+                    'show' => 'buses.show',
+                    'edit' => 'buses.edit',
+                    'update' => 'buses.update',
+                    'destroy' => 'buses.destroy',
+                ]);
+
+            Route::controller(BusController::class)
+                ->prefix('buses')
+                ->name('buses.')
+                ->group(function () {
+                    Route::post('{bus}/status', 'updateStatus')->name('status.update');
+                    Route::post('{bus}/maintenance', 'maintenance')->name('maintenance');
+                });
+
+            // ============ TRIPS MANAGEMENT ============
+            Route::resource('trips', TripController::class)
+                ->names([
+                    'index' => 'trips.index',
+                    'create' => 'trips.create',
+                    'store' => 'trips.store',
+                    'show' => 'trips.show',
+                    'edit' => 'trips.edit',
+                    'update' => 'trips.update',
+                    'destroy' => 'trips.destroy',
+                ]);
+
+            Route::controller(TripController::class)
+                ->prefix('trips')
+                ->name('trips.')
+                ->group(function () {
+                    Route::post('{trip}/status', 'updateStatus')->name('status.update');
+                    Route::get('{trip}/seats', 'seats')->name('seats');
+                    Route::post('{trip}/seats/update', 'updateSeats')->name('seats.update');
+                    Route::get('{trip}/passengers', 'passengers')->name('passengers');
+                    Route::get('schedule/create', 'createSchedule')->name('schedule.create');
+                    Route::post('schedule/store', 'storeSchedule')->name('schedule.store');
+                });
+
+                // Add explicit index routes for resource-like access
+                Route::get('/agencies/index', [CompanyController::class, 'myAgencies'])->name('agencies.index');
+                Route::get('/buses/index', [CompanyController::class, 'myBuses'])->name('buses.index');
+                Route::get('/trips/index', [CompanyController::class, 'myTrips'])->name('trips.index');
+                Route::get('/reports/index', [CompanyController::class, 'myReports'])->name('reports.index');
             });
 
         // =================================================================

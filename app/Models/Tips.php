@@ -16,7 +16,7 @@ class Tips extends Model
         'status',
     ];
 
-    protected $table = 'trips';
+    protected $table = 'tips';
 
     protected $primaryKey = 'trip_id';
 

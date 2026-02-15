@@ -166,7 +166,7 @@
                         </div>
                         <div class="bg-gray-50 px-5 py-3">
                             <div class="text-sm">
-                                <a href="{{ route('my-company.agencies') }}" class="font-medium text-blue-600 hover:text-blue-500">
+                                <a href="{{ route('my-company.agencies.index') }}" class="font-medium text-blue-600 hover:text-blue-500">
                                     View agencies
                                 </a>
                             </div>
@@ -189,7 +189,7 @@
                         </div>
                         <div class="bg-gray-50 px-5 py-3">
                             <div class="text-sm">
-                                <a href="{{ route('my-company.buses') }}" class="font-medium text-blue-600 hover:text-blue-500">
+                                <a href="{{ route('my-company.buses.index') }}" class="font-medium text-blue-600 hover:text-blue-500">
                                     View buses
                                 </a>
                             </div>
@@ -212,7 +212,7 @@
                         </div>
                         <div class="bg-gray-50 px-5 py-3">
                             <div class="text-sm">
-                                <a href="{{ route('my-company.trips') }}" class="font-medium text-blue-600 hover:text-blue-500">
+                                <a href="{{ route('my-company.trips.index') }}" class="font-medium text-blue-600 hover:text-blue-500">
                                     View trips
                                 </a>
                             </div>
@@ -262,7 +262,7 @@
                         </div>
                         <div class="bg-gray-50 px-5 py-3">
                             <div class="text-sm">
-                                <a href="{{ route('my-agency.buses') }}" class="font-medium text-blue-600 hover:text-blue-500">
+                                <a href="{{ route('my-agency.buses.index') }}" class="font-medium text-blue-600 hover:text-blue-500">
                                     View buses
                                 </a>
                             </div>
@@ -285,7 +285,7 @@
                         </div>
                         <div class="bg-gray-50 px-5 py-3">
                             <div class="text-sm">
-                                <a href="{{ route('my-agency.trips') }}" class="font-medium text-blue-600 hover:text-blue-500">
+                                <a href="{{ route('my-agency.trips.index') }}" class="font-medium text-blue-600 hover:text-blue-500">
                                     View trips
                                 </a>
                             </div>
@@ -892,7 +892,7 @@
                                 @endif
 
                                 @if(auth()->user()->role === 'company_admin')
-                                    <a href="{{ route('my-company.agencies') }}"
+                                    <a href="{{ route('my-company.agencies.create') }}"
                                        class="flex items-center p-3 bg-green-50 hover:bg-green-100 rounded-lg group">
                                         <div class="flex-shrink-0">
                                             <i class="fas fa-store-alt text-green-600 group-hover:text-green-700"></i>
@@ -903,7 +903,7 @@
                                         </div>
                                     </a>
 
-                                    <a href="{{ route('my-company.buses') }}"
+                                    <a href="{{ route('my-company.buses.create') }}"
                                        class="flex items-center p-3 bg-yellow-50 hover:bg-yellow-100 rounded-lg group">
                                         <div class="flex-shrink-0">
                                             <i class="fas fa-bus text-yellow-600 group-hover:text-yellow-700"></i>
