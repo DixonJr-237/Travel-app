@@ -294,7 +294,7 @@ class TripSeeder extends Seeder
             ],
         ];
 
-        DB::table('trips')->insert($trips);
+        DB::table('tips')->insert($trips);
     }
 }
 
