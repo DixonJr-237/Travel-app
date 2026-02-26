@@ -288,10 +288,10 @@ private function notifySuperAdmins($company, $user)
                     return $bus->trips->count();
                 });
             }),
-            'total_users' => $company->users()->count(), // Add this if you want
+            //'total_users' => $company->users()->count(), // Add this if you want
         ];
 
-        return view('admin.companies.show', compact('company', 'stats'));
+        return view('companies.show', compact('company', 'stats'));
     }
 
     /**

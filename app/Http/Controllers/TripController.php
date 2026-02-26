@@ -215,6 +215,8 @@ class TripController extends Controller
         return view('trips.show', compact('trip', 'stats'));
     }
 
+
+
     public function edit(Tips $trip)
     {
         $user = auth()->user();

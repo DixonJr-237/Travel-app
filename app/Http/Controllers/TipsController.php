@@ -81,6 +81,7 @@ class TipsController extends Controller
         return view('trips.create', compact('buses', 'journeys'));
     }
 
+
     public function store(Request $request)
     {
         $user = auth()->user();

@@ -506,7 +506,7 @@ class AgencyController extends Controller
             // Determine which view to return with fallback
             $view = $this->getViewForRole('show', $isSuperAdmin);
 
-            return view($view, compact('agency', 'stats'));
+            return view('agencies.show', compact('agency', 'stats'));
 
         } catch (\Exception $e) {
             Log::error('Error showing agency: ' . $e->getMessage());

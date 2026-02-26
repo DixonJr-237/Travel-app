@@ -29,7 +29,7 @@
                         @if($isSuperAdmin)
                             All Agencies Across All Companies
                         @elseif($isCompanyAdmin)
-                            Your Company's Agencies
+                            My Company's Agencies
                         @elseif($isAgencyAdmin)
                             Agency Details
                         @endif
@@ -38,7 +38,7 @@
                         @if($isSuperAdmin)
                             Manage all agency locations across companies ({{ $stats['total_companies'] ?? 0 }} companies)
                         @elseif($isCompanyAdmin)
-                            Manage your company's agency locations ({{ $stats['my_companies'] ?? 0 }} companies)
+                            Manage your company's agency locations ({{ $stats['totalAgencies'] ?? 0 }} agencies)
                         @elseif($isAgencyAdmin)
                             View and manage your agency information
                         @endif
@@ -54,8 +54,8 @@
                         </svg>
                         Add Agency
                     </a>
-                @elseif($isCompanyAdmin && !($hasAgency ?? false) && Route::has('my-agency.create'))
-                    <a href="{{ route('my-agency.create') }}"
+                @elseif($isCompanyAdmin  && Route::has('my-company.agencies.create'))
+                    <a href="{{ route('my-company.agencies.create') }}"
                        class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-150">
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -335,6 +335,15 @@
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                                                         </svg>
                                                     </a>
+                                                @elseif($isCompanyAdmin && $isMyCompanyAgency && Route::has('my-company.agencies.show'))
+                                                    <a href="{{ route('my-company.agencies.show', $agency->id_agence) }}"
+                                                       class="text-blue-600 hover:text-blue-900 transition-colors duration-150"
+                                                       title="View Details">
+                                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                                        </svg>
+                                                    </a>
                                                 @endif
 
                                                 {{-- Edit button --}}
@@ -346,8 +355,8 @@
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                                                         </svg>
                                                     </a>
-                                                @elseif($isCompanyAdmin && $isMyCompanyAgency && Route::has('my-agency.edit'))
-                                                    <a href="{{ route('my-agency.edit') }}"
+                                                @elseif($isCompanyAdmin && $isMyCompanyAgency && Route::has('my-company.agencies.edit', $agency->id_agence))
+                                                    <a href="{{ route('my-company.agencies.edit') }}"
                                                        class="text-green-600 hover:text-green-900 transition-colors duration-150"
                                                        title="Edit Agency">
                                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -357,9 +366,21 @@
                                                 @endif
 
                                                 {{-- Status toggle buttons for super admin --}}
-                                                @if($isSuperAdmin)
+                                                @if($isSuperAdmin || $isCompanyAdmin )
                                                     @if($status !== 'active' && Route::has('admin.agencies.activate'))
                                                         <form action="{{ route('admin.agencies.activate', $agency->id_agence) }}" method="POST" class="inline">
+                                                            @csrf
+                                                            <button type="submit"
+                                                                    class="text-green-600 hover:text-green-900 transition-colors duration-150"
+                                                                    title="Activate"
+                                                                    onclick="return confirm('Are you sure you want to activate this agency?')">
+                                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                                                </svg>
+                                                            </button>
+                                                        </form>
+                                                    @elseif ($status !== 'active' && Route::hs('my-company.agencies.activities'))
+                                                        <form action="{{ route('my-company.agencies.activate', $agency->id_agence) }}" method="POST" class="inline">
                                                             @csrf
                                                             <button type="submit"
                                                                     class="text-green-600 hover:text-green-900 transition-colors duration-150"
@@ -384,10 +405,34 @@
                                                                 </svg>
                                                             </button>
                                                         </form>
+                                                    @elseif ($status !== 'suspended' && Route::has('my-company.agencies.suspend'))
+                                                    <form action="{{ route('my-company.agencies.suspend', $agency->id_agence) }}" method="POST" class="inline">
+                                                            @csrf
+                                                            <button type="submit"
+                                                                    class="text-yellow-600 hover:text-yellow-900 transition-colors duration-150"
+                                                                    title="Suspend"
+                                                                    onclick="return confirm('Are you sure you want to suspend this agency?')">
+                                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                                                </svg>
+                                                            </button>
+                                                        </form>
                                                     @endif
 
                                                     @if($status !== 'inactive' && Route::has('admin.agencies.deactivate'))
                                                         <form action="{{ route('admin.agencies.deactivate', $agency->id_agence) }}" method="POST" class="inline">
+                                                            @csrf
+                                                            <button type="submit"
+                                                                    class="text-red-600 hover:text-red-900 transition-colors duration-150"
+                                                                    title="Deactivate"
+                                                                    onclick="return confirm('Are you sure you want to deactivate this agency?')">
+                                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                                                                </svg>
+                                                            </button>
+                                                        </form>
+                                                    @elseif ($status !== 'inactive' && Route::has('my-compny.agencies.deactivate'))
+                                                        <form action="{{ route('my-company.agencies.deactivate', $agency->id_agence) }}" method="POST" class="inline">
                                                             @csrf
                                                             <button type="submit"
                                                                     class="text-red-600 hover:text-red-900 transition-colors duration-150"
@@ -429,7 +474,7 @@
                                                         </svg>
                                                         Create First Agency
                                                     </a>
-                                                @elseif($isCompanyAdmin && !($hasAgency ?? false) && Route::has('my-agency.create'))
+                                                @elseif($isCompanyAdmin  && Route::has('my-company.agencies.create'))
                                                     <a href="{{ route('my-agency.create') }}" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700">
                                                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>

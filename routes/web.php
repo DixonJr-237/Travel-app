@@ -196,6 +196,9 @@ Route::middleware(['auth'])->group(function () {
                 // Company management
                 Route::controller(CompanyController::class)->group(function () {
                     Route::get('/', 'myCompany')->name('dashboard');
+                    Route::get('/company/{company}', [CompanyController::class, 'show'])->name('companies.show');
+                    Route::get('/company/{company}/edit', [CompanyController::class, 'edit'])->name('companies.edit');
+                    Route::put('/company/{company}', [CompanyController::class, 'update'])->name('companies.update');
                     Route::get('/edit', 'editMyCompany')->name('edit');
                     Route::patch('/update', 'updateMyCompany')->name('update');
                     Route::get('/agencies', 'myAgencies')->name('agencies'); // This is the agencies route
@@ -292,6 +295,8 @@ Route::middleware(['auth'])->group(function () {
             // Agency management
             Route::controller(AgencyController::class)->group(function () {
                 Route::get('/', 'myAgency')->name('dashboard');
+                Route::get('/agency/{agency}', [AgencyController::class, 'show'])->name('agencies.show');
+                Route::get('/agency/{agency}/edit', [AgencyController::class, 'edit'])->name('agencies.edit');
                 Route::get('/edit', 'editMyAgency')->name('edit');
                 Route::patch('/update', 'updateMyAgency')->name('update');
                 Route::get('/reports', 'myReports')->name('reports');

@@ -368,30 +368,41 @@
                                                 'agency_admin' => 'my-agency.trips.destroy',
                                                 default => null
                                             };
+
+                                            // Get the trip ID safely
+                                            $tripId = $trip->id_tips ?? $trip->id ?? null;
                                         @endphp
 
                                         <div class="flex space-x-3">
-                                            @if($showRoute && Route::has($showRoute))
-                                                <a href="{{ route($showRoute, $trip->id_tips ?? $trip->id) }}"
+                                            @if($showRoute && Route::has($showRoute) && $tripId)
+                                                <a href="{{ route($showRoute, ['trip' => $tripId]) }}"
                                                    class="text-blue-600 hover:text-blue-900"
                                                    title="View Details">
                                                     <i class="fas fa-eye"></i>
                                                 </a>
+                                            @else
+                                                <span class="text-gray-400 cursor-not-allowed" title="View Details (Invalid ID)">
+                                                    <i class="fas fa-eye"></i>
+                                                </span>
                                             @endif
 
-                                            @if($editRoute && Route::has($editRoute))
-                                                <a href="{{ route($editRoute, $trip->id_tips ?? $trip->id) }}"
+                                            @if($editRoute && Route::has($editRoute) && $tripId)
+                                                <a href="{{ route($editRoute, ['trip' => $tripId]) }}"
                                                    class="text-green-600 hover:text-green-900"
                                                    title="Edit">
                                                     <i class="fas fa-edit"></i>
                                                 </a>
+                                            @else
+                                                <span class="text-gray-400 cursor-not-allowed" title="Edit (Invalid ID)">
+                                                    <i class="fas fa-edit"></i>
+                                                </span>
                                             @endif
 
-                                            @if($destroyRoute && Route::has($destroyRoute))
-                                                <form action="{{ route($destroyRoute, $trip->id_tips ?? $trip->id) }}"
+                                            @if($destroyRoute && Route::has($destroyRoute) && $tripId)
+                                                <form action="{{ route($destroyRoute, ['trip' => $tripId]) }}"
                                                       method="POST"
                                                       class="inline"
-                                                      onsubmit="return confirm('Are you sure you want to delete this trip?');">
+                                                      onsubmit="return confirm('⚠️ Are you sure you want to delete this trip? This action cannot be undone.');">
                                                     @csrf
                                                     @method('DELETE')
                                                     <button type="submit"
@@ -400,6 +411,10 @@
                                                         <i class="fas fa-trash"></i>
                                                     </button>
                                                 </form>
+                                            @else
+                                                <span class="text-gray-400 cursor-not-allowed" title="Delete (Invalid ID or not allowed)">
+                                                    <i class="fas fa-trash"></i>
+                                                </span>
                                             @endif
                                         </div>
                                     </td>
@@ -439,7 +454,7 @@
                     </table>
                 </div>
 
-                <!-- Pagination - FIXED -->
+                <!-- Pagination -->
                 @if(isset($tips))
                     @if($tips instanceof \Illuminate\Pagination\LengthAwarePaginator && $tips->hasPages())
                         <div class="px-6 py-4 bg-gray-50 border-t border-gray-200">
@@ -534,4 +549,60 @@
             @endif
         </div>
     </div>
+
+    @push('scripts')
+        <script>
+            (function() {
+                // Auto-submit filters when select boxes change
+                const filterSelects = document.querySelectorAll('#agency_id, #status, #bus_id');
+
+                filterSelects.forEach(select => {
+                    select.addEventListener('change', function() {
+                        this.form.submit();
+                    });
+                });
+
+                // Debounced search input
+                const searchInput = document.getElementById('search');
+                if (searchInput) {
+                    let timeout = null;
+                    searchInput.addEventListener('keyup', function(e) {
+                        clearTimeout(timeout);
+                        timeout = setTimeout(() => {
+                            if (this.value.length >= 2 || this.value.length === 0) {
+                                this.form.submit();
+                            }
+                        }, 500);
+                    });
+                }
+
+                // Set default date to today if not set
+                const dateInput = document.getElementById('departure_date');
+                if (dateInput && !dateInput.value) {
+                    const today = new Date().toISOString().split('T')[0];
+                    dateInput.value = today;
+                }
+
+                // Date range validation
+                const dateFrom = document.getElementById('date_from');
+                const dateTo = document.getElementById('date_to');
+
+                if (dateFrom && dateTo) {
+                    dateFrom.addEventListener('change', function() {
+                        if (this.value && dateTo.value && this.value > dateTo.value) {
+                            alert('Date From cannot be later than Date To');
+                            this.value = '';
+                        }
+                    });
+
+                    dateTo.addEventListener('change', function() {
+                        if (this.value && dateFrom.value && dateFrom.value > this.value) {
+                            alert('Date To cannot be earlier than Date From');
+                            this.value = '';
+                        }
+                    });
+                }
+            })();
+        </script>
+    @endpush
 </x-app-layout>

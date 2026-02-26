@@ -12,7 +12,7 @@ class TripSeeder extends Seeder
      */
     public function run(): void
     {
-        $trips = [
+        $tips = [
             // Casablanca to Rabat trips (journey_id 1)
             [
                 'departure_date' => '2026-02-15',
@@ -294,7 +294,7 @@ class TripSeeder extends Seeder
             ],
         ];
 
-        DB::table('trips')->insert($trips);
+        DB::table('tips')->insert($tips);
     }
 }
 

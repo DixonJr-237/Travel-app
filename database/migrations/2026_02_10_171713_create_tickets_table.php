@@ -17,7 +17,7 @@ return new class extends Migration
             $table->string('booking_reference')->unique();
             $table->foreignId('journey_id')->constrained('journeys', 'journey_id');
             $table->foreignId('customer_id')->constrained('customers', 'customer_id');
-            $table->foreignId('trip_id')->constrained('trips', 'trip_id');
+            $table->foreignId('trip_id')->constrained('tips', 'trip_id');
             $table->timestamps();
         });
     }

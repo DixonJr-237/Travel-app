@@ -6,6 +6,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use PhpParser\Node\Stmt\Return_;
 
 class User extends Authenticatable
 {
@@ -99,6 +100,18 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return in_array($this->role, ['super_admin', 'company_admin', 'agency_admin']);
+    }
+
+    // In app/Models/User.php
+    public function company()
+    {
+        // This assumes companies table has a 'user_id' column
+        return $this->hasOne(Company::class, 'user_id');
+    }
+
+    public function agence()
+    {
+        return $this->hasOne(Agence::class,'user_id');
     }
 
 
